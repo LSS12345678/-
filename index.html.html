@@ -1,0 +1,1319 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>謎解き脱出ゲーム</title>
+    <!-- Tailwind CSS CDNをロード -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Interフォントを設定し、日本語フォントを優先 */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+        }
+        /* アニメーション定義 */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .animate-fade-in {
+            animation: fadeIn 2s ease-out forwards;
+        }
+
+        @keyframes bounceIn {
+            0% { transform: scale(0.5); opacity: 0; }
+            80% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(1); }
+        }
+        /* モーダルが画面中央でバウンスインするアニメーション */
+        .modal-bounce-in > div {
+            animation: bounceIn 0.3s forwards;
+        }
+
+        /* カスタムスクロールバー (ダークテーマ向け) */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background-color: #4b5563; /* Gray 600 */
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background-color: #1f2937; /* Gray 800 */
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-black flex flex-col items-center justify-center p-4 text-white">
+
+    <!-- Chapter Display -->
+    <div id="chapter-display" class="fixed top-0 left-0 w-full p-3 flex justify-center space-x-4 bg-black bg-opacity-50 z-30 hidden">
+        <!-- Chapters will be rendered here by JavaScript -->
+    </div>
+
+    <!-- Top Bar for Room Info (i) and Hint (💡) -->
+    <div id="top-bar" class="fixed top-0 right-0 z-40 p-3 pt-5 hidden">
+        <div class="flex space-x-2">
+            <!-- 部屋情報ボタン (i) -->
+            <button 
+                onclick="showRoomDescriptionModal()"
+                class="p-2 bg-neutral-800 text-gray-200 rounded-full shadow-md hover:bg-neutral-700 transition transform hover:scale-105 border border-neutral-700"
+                title="部屋情報"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            </button>
+            <!-- ヒントボタン (💡) -->
+            <button
+                onclick="showHint()"
+                class="p-2 bg-yellow-600 text-gray-900 rounded-full shadow-md hover:bg-yellow-500 transition transform hover:scale-105"
+                title="ヒント"
+            >
+                <span class="text-lg leading-none">💡</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- メインカード -->
+    <div id="game-container" class="bg-neutral-900 p-8 rounded-xl shadow-2xl max-w-4xl w-full border border-neutral-700">
+        
+        <h1 class="text-3xl font-bold text-yellow-400 text-center mb-6 border-b pb-2 border-neutral-700">謎解き脱出ゲーム</h1>
+
+        <!-- ゲーム開始画面 -->
+        <div id="start-screen" class="text-center p-4">
+            <p class="text-base mb-6 leading-relaxed text-gray-300">
+              あなたは、見知らぬ薄暗い部屋で目を覚ましました。
+              脱出するには、隠された手がかりを見つけ、巧妙な謎を解き明かす必要があります。
+            </p>
+            <button
+              onclick="startGame()"
+              class="px-6 py-3 bg-green-700 text-white text-lg font-semibold rounded-md shadow-lg hover:bg-green-600 transition-all duration-300 ease-in-out transform hover:scale-105"
+            >
+              ゲームスタート
+            </button>
+        </div>
+
+        <!-- ゲーム画面（初期は非表示） -->
+        <div id="game-screen" class="hidden">
+            
+            <!-- メッセージ表示エリア -->
+            <div id="message-display" class="p-3 rounded-md mb-5 text-center text-base font-medium bg-transparent text-gray-500 min-h-[40px]">
+                <!-- メッセージがここに表示されます -->
+            </div>
+
+            <!-- Current Room Items Display -->
+            <h2 id="room-title" class="text-lg font-semibold mb-3 text-center text-yellow-400 border-b pb-2 border-neutral-700"></h2>
+            
+            <div id="room-items" class="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-3 mb-6">
+                <!-- アイテムがJavaScriptによってここにレンダリングされます -->
+            </div>
+
+            <!-- Input Fields (金庫/パネル/キャビネット) -->
+            <div id="input-fields" class="mt-4 p-5 bg-neutral-800 rounded-md shadow-inner border border-neutral-700 hidden">
+                <p id="input-label" class="text-teal-400 mb-2 text-base font-semibold"></p>
+                <input
+                    type="text"
+                    id="input-field"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxlength="5"
+                    class="w-full p-2 mb-3 text-white bg-black border border-neutral-600 rounded-sm text-lg text-center focus:outline-none focus:ring-1 focus:ring-teal-400"
+                />
+                <button
+                    id="input-submit-button"
+                    class="w-full py-2 bg-teal-600 text-white text-base font-semibold rounded-md shadow-lg hover:bg-teal-500 transition transform hover:scale-[1.01]"
+                    disabled
+                    onclick="handleInputSubmit()"
+                >
+                    アンロック
+                </button>
+                <button
+                    onclick="cancelAndClearInput()"
+                    class="w-full mt-1 py-1 bg-neutral-600 text-gray-200 font-medium rounded-md hover:bg-neutral-500 transition text-sm"
+                >
+                    キャンセル
+                </button>
+            </div>
+
+            <!-- Inventory Display -->
+            <div class="mt-6 pt-3 border-t border-neutral-700">
+              <h3 class="text-lg font-semibold mb-2 text-center text-yellow-400">持ち物 (<span id="inventory-count">0</span>)</h3>
+              <div id="inventory-list" class="flex flex-wrap gap-2 justify-center min-h-[40px]">
+                <p id="empty-inventory" class="text-gray-500 text-xs">何も持っていません。</p>
+                <!-- インベントリアイテムがJavaScriptによってここにレンダリングされます -->
+              </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- モーダルコンテナ (全モーダルをここに入れる) -->
+    <div id="modal-container">
+        <!-- JavaScriptによってモーダルがここにレンダリングされます -->
+    </div>
+    
+    <!-- Game Won Screen -->
+    <div id="game-won-screen" class="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 hidden">
+        <div class="text-center p-8 bg-neutral-900 rounded-lg shadow-2xl border-4 border-green-500 text-white modal-bounce-in">
+          <h2 class="text-4xl font-bold text-green-400 mb-4">脱出成功！</h2>
+          <p class="text-lg text-gray-300 mb-6">すべての謎を解き明かし、この場所から脱出しました！</p>
+          <button
+            onclick="resetGame()"
+            class="px-5 py-2 bg-teal-600 text-white text-lg font-semibold rounded-md shadow-lg hover:bg-teal-500 transition-all duration-300 transform hover:scale-105"
+          >
+            もう一度プレイする
+          </button>
+        </div>
+    </div>
+
+    <!-- Room Intro Screen -->
+    <div id="room-intro-screen" class="fixed inset-0 bg-black bg-opacity-95 flex items-center justify-center z-50 hidden text-center">
+        <div id="intro-content" class="px-8">
+            <!-- イントロテキストがここに挿入されます -->
+        </div>
+    </div>
+
+    <!-- Item Acquired Notification -->
+    <div id="acquired-item-notification" class="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 
+        p-5 bg-green-600 text-white 
+        rounded-lg shadow-2xl z-50 
+        border border-green-500 opacity-0 hidden text-center"
+    >
+        <p class="text-xl font-bold whitespace-nowrap">
+            「<span id="acquired-item-name"></span>」を入手しました！
+        </p>
+    </div>
+
+<script>
+    // --- 1. GAME DATA (設定) ---
+    const gameData = {
+      rooms: {
+        // 部屋名: リビング
+        room1: {
+          name: 'リビング',
+          description: '薄暗いリビングルームです。目の前には古びた机があります。左には額縁、右には古時計が見えます。奥には鍵のかかったドアがあり、その近くには流し台があります。', 
+          baseItems: [
+            { id: 'desk', name: '古びた机', initialDescription: '引き出しが一つあります。中に何か隠されているかもしれません。', action: 'inspect_desk', image: 'https://placehold.co/150x100/ADD8E6/000?text=古びた机' },
+            { id: 'picture_frame', name: '額縁', initialDescription: '壁にかかっている額縁です。裏に「19」という数字が書かれています。', action: 'inspect_picture_frame', image: 'https://placehold.co/100x100/008000/FFF?text=額縁' },
+            { id: 'clock', name: '古時計', initialDescription: '壁にかかった古時計です。針は「3時」を指しています。', action: 'inspect_clock', image: 'https://placehold.co/80x80/FFFFFF/000?text=古時計' },
+            { id: 'safe', name: '金庫', initialDescription: '数字のキーパッドが付いた小さな金庫です。パスワードが必要です。', action: 'inspect_safe', image: 'https://placehold.co/120x120/A9A9A9/000?text=金庫' },
+            { id: 'sink', name: '古い流し台', initialDescription: '水が出そうな古い流し台です。何か洗えそうなものがあれば使えそうです。', action: 'inspect_sink', image: 'https://placehold.co/100x100/B0C4DE/000?text=流し台' },
+          ],
+          gatedItems: [
+            { id: 'wall_panel', name: '奇妙な壁のパネル', initialDescription: '3桁の数字を入力するパネルです。コードが必要です。', action: 'inspect_wall_panel', image: 'https://placehold.co/100x100/6A5ACD/FFF?text=壁のパネル' },
+            { id: 'color_chart', name: '色見本表', initialDescription: '壁に貼られた色見本表です。赤=2, 青=1, 黄=3と書かれています。', action: 'inspect_color_chart', image: 'https://placehold.co/80x80/FFDAB9/000?text=色見本表' },
+          ],
+          doorItem: { id: 'door_to_room2', name: '子供部屋へのドア', initialDescription: '別の部屋へと続くドアのようです。鍵がかかっています。', action: 'try_door_to_room2', image: 'https://placehold.co/100x200/8B4513/FFF?text=子供部屋へのドア' }
+        },
+        // 部屋名: 子供部屋
+        room2: {
+          name: '子供部屋',
+          description: 'リビングよりも少し明るい部屋です。壁には鍵付きロッカーがあります。中央には大きなテーブルが置かれています。', 
+          initialItems: [ // Always visible
+            { id: 'table', name: '大きなテーブル', initialDescription: '中央に置かれた大きなテーブルです。下に何か隠されていそうです。', action: 'inspect_table', image: 'https://placehold.co/150x100/CD853F/FFF?text=テーブル' },
+            // アイテム名と説明文が更新されました
+            { id: 'tattered_certificate', name: 'ボロボロの賞状', initialDescription: '壁に飾られたボロボロの賞状です。そこには、「2012年 9月23日　小学2年生の部　かけっこ１位」と書かれています。', action: 'inspect_info', image: 'https://placehold.co/100x100/A0A0A0/000?text=賞状' },
+            // ★追加: 車のおもちゃを初期アイテムとして表示
+            { id: 'toy_car', name: '車のおもちゃ', initialDescription: '子供のお気に入りのおもちゃのようです。車のナンバーは「8657」でした。車の裏には「製造日　2007年 5月9日」と書いてあります。', action: 'inspect_info', image: 'https://placehold.co/60x60/FF6347/000?text=車' },
+            // ★追加: 思い出の写真を初期アイテムとして表示
+            { id: 'memory_photo', name: '思い出の写真', initialDescription: '子供の誕生日のときに家族で撮った記念写真のようです。写真に写ったケーキには５本のろうそくが立っています。写真の裏には2009年 3月9日と記録されています。', action: 'inspect_info', image: 'https://placehold.co/60x60/FFC0CB/000?text=写真' },
+            { id: 'locked_locker', name: '鍵付きロッカー', initialDescription: '8桁のパスワードでロックされています。', action: 'inspect_locked_locker', image: 'https://placehold.co/120x120/8B0000/FFF?text=ロッカー' },
+            { id: 'door_to_room3', name: '地下室へのドア', initialDescription: '別の部屋へと続くドアのようです。鍵がかかっています。', action: 'try_door_to_room3', image: 'https://placehold.co/100x200/8B4513/FFF?text=地下室へのドア' },
+          ],
+          // ロッカー解錠後に表示されるアイテム
+          revealedByLocker: [ 
+            { id: 'bookshelf', name: '本棚', initialDescription: '古びた本が並んでいます。一冊だけ妙な挟み込みがあるようです。', action: 'inspect_bookshelf', image: 'https://placehold.co/130x180/8B4513/FFF?text=本棚' },
+            { id: 'sun_painting', name: '太陽の絵', initialDescription: '壁にかかった太陽の絵です。絵の順序が重要かもしれません。', action: 'click_painting', image: 'https://placehold.co/100x100/FFD700/000?text=太陽の絵' },
+            { id: 'moon_painting', name: '月の絵', initialDescription: '壁にかかった月の絵です。絵の順序が重要かもしれません。', action: 'click_painting', image: 'https://placehold.co/100x100/C0C0C0/000?text=月の絵' },
+            { id: 'star_painting', name: '星の絵', initialDescription: '壁にかかった星の絵です。絵の順序が重要かもしれません。', action: 'click_painting', image: 'https://placehold.co/100x100/87CEEB/000?text=星の絵' },
+          ]
+        },
+        // 部屋名: 地下室
+        room3: {
+          name: '地下室',
+          description: '子供部屋から続いている、少しひんやりとした地下室です。壁際には頑丈なキャビネットがあります。部屋の隅には石像が立っています。床には奇妙な窪みのあるタイルが埋め込まれています。', 
+          items: [
+            { id: 'white_table', name: '白いテーブル', initialDescription: '中央に置かれた白いテーブルです。その上には美しいオルゴールが置かれていますが、壊れているようです。', action: 'inspect_table_room3', image: 'https://placehold.co/150x100/F5F5F5/000?text=白いテーブル' },
+            { id: 'locked_cabinet', name: '鍵のかかったキャビネット', initialDescription: '頑丈なキャビネットです。3桁の数字の鍵がかかっています。', action: 'inspect_locked_cabinet', image: 'https://placehold.co/150x100/556B2F/FFF?text=キャビネット' },
+            { id: 'statue', name: '石像', initialDescription: '部屋の隅に立つ石像です。台座に「▲●■」と刻まれています。', action: 'inspect_statue', image: 'https://placehold.co/100x150/D3D3D3/000?text=石像' },
+            { id: 'suspicious_tile', name: '怪しいタイル', initialDescription: '床に埋め込まれたタイルです。中央に四角い窪みがあります。', action: 'inspect_suspicious_tile', image: 'https://placehold.co/80x80/4682B4/FFF?text=怪しいタイル' },
+            { id: 'telescope', name: '古い望遠鏡', initialDescription: '部屋の隅にある古い望遠鏡。汚れた窓に向けられている。', action: 'inspect_telescope', image: 'https://placehold.co/100x150/333333/FFF?text=望遠鏡' },
+            { id: 'astrolabe', name: '古代の天球儀', initialDescription: '壁に埋め込まれた複雑な天球儀。宝石型の窪みがある。', action: 'inspect_astrolabe', image: 'https://placehold.co/120x120/DAA520/000?text=天球儀' },
+            { id: 'final_door', name: '最終のドア', initialDescription: 'この部屋からの出口のようです。最終の鍵が必要です。', action: 'try_final_door', image: 'https://placehold.co/100x200/8B4513/FFF?text=最終のドア' },
+          ],
+        },
+      },
+      hiddenItems: {
+        book: { id: 'book', name: '古びた本', description: '机の引き出しから見つかった本です。85ページにしおりが挟まっています。', image: 'https://placehold.co/60x60/000000/FFF?text=古びた本（黒）' },
+        dirty_cloth: { id: 'dirty_cloth', name: '汚れた布', description: '金庫の中から見つかった汚れた布です。', image: 'https://placehold.co/60x60/A0522D/FFF?text=汚れた布' },
+        clean_cloth: { id: 'clean_cloth', name: 'きれいな布', description: '洗ってきれいになった布です。「黄、青、赤」の順に並んだ模様が浮かび上がっています。', image: 'https://placehold.co/60x60/F5F5DC/000?text=きれいな布' },
+        key_to_room2: { id: 'key_to_room2', name: '子供部屋への鍵', description: '別の部屋へと続くドアを開けるための鍵です。', image: 'https://placehold.co/60x60/FFD700/000?text=子供部屋への鍵' },
+        doodle: { id: 'doodle', name: '落書き', description: '子供の落書きのようだ。太陽→月→星の順に絵が書いてある。', image: 'https://placehold.co/60x60/FFF8DC/000?text=落書き' }, 
+        // ★変更: 走り書きの数字の説明文を更新
+        small_numbers_note: { id: 'small_numbers_note', name: '走り書きの数字', description: '真っ白な紙の端っこにポツンと「9」という数字だけが書いてある。', image: 'https://placehold.co/60x60/FFF8DC/000?text=走り書きの数字' },
+        wooden_block: { id: 'wooden_block', name: '奇妙な積み木', description: '何かにはまりそうな、四角い木製の積み木です。', image: 'https://placehold.co/60x60/8B4513/FFF?text=積み木' },
+        cipher_note: { id: 'cipher_note', name: '暗号メモ', description: '「▲=7, ●=3, ■=3」と書かれたメモです。', image: 'https://placehold.co/60x60/FFF8DC/000?text=暗号メモ' },
+        key_to_room3: { id: 'key_to_room3', name: '地下室への鍵', description: '最後の部屋へと続くドアを開けるための鍵です。', image: 'https://placehold.co/60x60/008000/FFF?text=地下室への鍵' },
+        broken_music_box: { id: 'broken_music_box', name: '壊れたオルゴール', description: '美しいオルゴール。しかし、ハンドルが欠けている。', image: 'https://placehold.co/60x60/D2B48C/000?text=オルゴール' },
+        music_box_handle: { id: 'music_box_handle', name: 'オルゴールのハンドル', description: '小さく、精巧な作りのハンドル。オルゴールに使えそうだ。', image: 'https://placehold.co/40x40/C0C0C0/000?text=ハンドル' },
+        strange_gem: { id: 'strange_gem', name: '奇妙な宝石', description: '赤く、鈍い光を放つ奇妙な宝石。', image: 'https://placehold.co/40x40/DC143C/FFF?text=宝石' },
+        final_key: { id: 'final_key', name: '最終の鍵', description: '部屋から脱出するための鍵です！', image: 'https://placehold.co/60x60/FFD700/000?text=最終の鍵' },
+      },
+    };
+
+    // --- 2. STATE VARIABLES (ゲーム状態) ---
+    let currentRoomId = 'room1';
+    let inventory = [];
+    let message = '';
+    let gameWon = false;
+    let gameStarted = false;
+    let safeUnlocked = false;
+    let clothCleaned = false;
+    let wallPanelSolved = false;
+    let room2DoorUnlocked = false;
+    let room3DoorUnlocked = false;
+    let paintingSequence = [];
+    let cabinetUnlocked = false;
+    let lockerUnlocked = false; 
+    let windowCleaned = false;
+    let astrolabeSequence = [];
+    let musicBoxTaken = false;
+
+    // UI States
+    let activeInputType = null; 
+    let safeInputValue = '';
+    let wallPanelInputValue = '';
+    let cabinetInputValue = '';
+    let lockerInputValue = ''; 
+    let showDetailModal = false;
+    let activeDetailItem = null;
+    let acquiredItemName = '';
+    let showRoomIntro = false;
+    let introStep = '';
+    let showHintModal = false;
+    let hintMessage = '';
+    let showColorSequenceModal = false;
+    let showAstrolabePuzzle = false;
+    
+    let currentRoomItems = []; // 動的に計算されるアイテムリスト
+
+    // --- 3. UTILITY FUNCTIONS (UI操作ヘルパー) ---
+
+    function renderChapterDisplay() {
+        const chapterEl = document.getElementById('chapter-display');
+        if (!gameStarted || showRoomIntro) {
+            chapterEl.classList.add('hidden');
+            return;
+        }
+        chapterEl.classList.remove('hidden');
+
+        const chapters = [
+            { id: 'room1', name: 'Chapter 1: リビング' },
+            { id: 'room2', name: 'Chapter 2: 子供部屋' },
+            { id: 'room3', name: 'Chapter 3: 地下室' }
+        ];
+
+        let html = '';
+        chapters.forEach(chap => {
+            const isCurrent = chap.id === currentRoomId;
+            const activeClass = isCurrent ? 'text-yellow-400 border-yellow-400' : 'text-gray-500 border-transparent';
+            html += `<div class="px-3 py-1 border-b-2 ${activeClass} transition-colors duration-300">
+                         <span class="text-sm font-semibold">${chap.name}</span>
+                     </div>`;
+        });
+        chapterEl.innerHTML = html;
+    }
+
+    // HTMLでModalを動的に生成する関数 (中央表示を強調)
+    function renderModal(title, contentHTML, onCloseFunctionName) {
+        // modal-bounce-in クラスを追加して中央表示アニメーションを適用
+        const modalHTML = `
+            <div id="active-modal" class="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4 modal-bounce-in">
+                <div class="bg-neutral-900 p-6 rounded-lg shadow-xl max-w-sm w-full border border-neutral-700 text-gray-100">
+                    <div class="flex justify-between items-center mb-3 border-b pb-2 border-neutral-700">
+                        <h3 class="text-lg font-bold text-teal-400">${title}</h3> 
+                        <button onclick="${onCloseFunctionName}()" class="text-gray-400 hover:text-teal-400 transition">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                    ${contentHTML}
+                </div>
+            </div>
+        `;
+        document.getElementById('modal-container').innerHTML = modalHTML;
+    }
+    
+    function closeDetailModal() {
+        showDetailModal = false;
+        activeDetailItem = null;
+        message = '';
+        renderModals();
+        renderMessage();
+    }
+    
+    function closeHintModal() {
+        showHintModal = false;
+        hintMessage = '';
+        message = '';
+        renderModals();
+        renderMessage();
+    }
+
+    function closeColorSequenceModal() {
+        showColorSequenceModal = false;
+        renderModals();
+    }
+
+    function showAstrolabeModal() {
+        astrolabeSequence = []; // Reset sequence
+        showAstrolabePuzzle = true;
+        renderModals();
+    }
+
+    function closeAstrolabeModal() {
+        showAstrolabePuzzle = false;
+        renderModals();
+    }
+
+    function handleAstrolabeSymbolClick(symbol) {
+        astrolabeSequence.push(symbol);
+        setMessage(`シンボル「${symbol}」を選択しました。`);
+
+        const correctSequence = ['sun', 'moon', 'star', 'planet', 'comet'];
+        if (astrolabeSequence.length === correctSequence.length) {
+            if (JSON.stringify(astrolabeSequence) === JSON.stringify(correctSequence)) {
+                setMessage('天球儀が輝き、隠し扉が開いて【最終の鍵】が出てきた！');
+                const finalKey = gameData.hiddenItems.final_key;
+                inventory.push(finalKey);
+                showNotification(finalKey.name);
+                // Consume the gem
+                inventory = inventory.filter(item => item.id !== 'strange_gem');
+                closeAstrolabeModal();
+            } else {
+                setMessage('何も起こらない。順序が違うようだ。', true);
+                astrolabeSequence = [];
+            }
+            renderGame();
+        }
+    }
+
+    function setMessage(text, isError = false) {
+        message = text;
+        renderMessage(isError);
+    }
+    
+    function renderMessage(isError = false) {
+        const msgEl = document.getElementById('message-display');
+        msgEl.textContent = message;
+        
+        // クラスをリセット
+        msgEl.className = `p-3 rounded-md mb-5 text-center text-base font-medium min-h-[40px]`;
+        
+        if (message) {
+            msgEl.classList.add('bg-neutral-800', 'border', 'border-neutral-700', 'text-gray-200');
+            if (isError) {
+                msgEl.classList.add('text-red-400', 'border-red-600');
+            }
+        } else {
+            msgEl.classList.add('bg-transparent', 'text-gray-500');
+        }
+    }
+
+    function showNotification(itemNames) {
+        const notificationEl = document.getElementById('acquired-item-notification');
+        
+        // 複数のアイテム名を結合して表示
+        document.getElementById('acquired-item-name').textContent = itemNames;
+        
+        notificationEl.classList.remove('hidden', 'opacity-0');
+        notificationEl.classList.add('animate-bounce-in');
+
+        setTimeout(() => {
+            notificationEl.classList.remove('animate-bounce-in');
+            notificationEl.classList.add('opacity-0');
+            setTimeout(() => {
+                notificationEl.classList.add('hidden');
+            }, 300); // Wait for opacity transition
+        }, 2000);
+    }
+
+    function hideNotification() {
+        const notificationEl = document.getElementById('acquired-item-notification');
+        notificationEl.classList.add('hidden', 'opacity-0');
+    }
+    
+    function closeInputFields() {
+        activeInputType = null;
+        const inputFieldsEl = document.getElementById('input-fields');
+        inputFieldsEl.classList.add('hidden');
+    }
+
+    function cancelAndClearInput() {
+        safeInputValue = '';
+        wallPanelInputValue = '';
+        cabinetInputValue = '';
+        lockerInputValue = ''; 
+        setMessage('');
+        closeInputFields();
+    }
+
+    // 部屋移動ロジック
+    function switchRoom(newRoomId) {
+        // 'wooden_block'（積み木）と 'clean_cloth'（きれいな布）のみ持ち物に残し、他は削除
+        const retainedItems = ['wooden_block', 'clean_cloth']; 
+        inventory = inventory.filter(item => retainedItems.includes(item.id));
+        
+        // Find clean_cloth in the inventory and update its description
+        const clothInInventory = inventory.find(item => item.id === 'clean_cloth');
+        if (clothInInventory) {
+            clothInInventory.description = '洗ってきれいになった布です。まだ、何かに使えそう';
+        }
+
+        // 部屋状態の更新とイントロ開始
+        currentRoomId = newRoomId;
+        startRoomIntro();
+    }
+
+    // --- 4. RENDER FUNCTIONS (UI描画) ---
+
+    function calculateCurrentRoomItems() {
+        const currentRoom = gameData.rooms[currentRoomId];
+        if (currentRoomId === 'room1') {
+            let items = [...currentRoom.baseItems];
+            if (safeUnlocked) {
+                items = [...items, ...currentRoom.gatedItems];
+            }
+            items = [...items, currentRoom.doorItem];
+            return items;
+        } else if (currentRoomId === 'room2') {
+            let items = [...currentRoom.initialItems];
+            // ロッカー解錠後にアイテムを表示
+            if (lockerUnlocked) {
+                items = [...items, ...currentRoom.revealedByLocker];
+            }
+            return items;
+        }
+        return currentRoom.items;
+    }
+
+    function renderRoomItems() {
+        currentRoomItems = calculateCurrentRoomItems();
+        const itemsEl = document.getElementById('room-items');
+        let html = '';
+
+        currentRoomItems.forEach(item => {
+            html += `
+                <div
+                    onclick="handleItemClick('${item.id}')"
+                    class="p-2 bg-neutral-800 rounded-md shadow-lg hover:bg-neutral-700 transition cursor-pointer flex flex-col items-center text-center border-b-2 border-neutral-700 hover:border-teal-400 transform hover:scale-[1.02]"
+                >
+                    <img src="${item.image}" alt="${item.name}" class="w-16 h-16 rounded object-cover mb-1 border border-neutral-600" />
+                    <span class="text-xs font-medium text-gray-100">${item.name}</span>
+                </div>
+            `;
+            
+            // Room 1 かつ金庫の直後に「？」ボタンを配置
+            if (currentRoomId === 'room1' && item.id === 'safe') {
+                html += `
+                    <div
+                      onclick="showColorSequence()"
+                      class="p-2 bg-yellow-600 text-black font-bold rounded-md shadow-lg hover:bg-yellow-500 transition cursor-pointer flex flex-col items-center justify-center text-center border-b-2 border-yellow-500 hover:border-yellow-400 transform hover:scale-[1.05] min-h-[80px]"
+                      title="パズルヒント"
+                    >
+                      <span class="text-3xl font-extrabold leading-none">?</span>
+                    </div>
+                `;
+            }
+        });
+
+        itemsEl.innerHTML = html;
+        document.getElementById('room-title').textContent = gameData.rooms[currentRoomId].name + 'のアイテム';
+    }
+
+    function renderInventory() {
+        const listEl = document.getElementById('inventory-list');
+        const countEl = document.getElementById('inventory-count');
+        
+        countEl.textContent = inventory.length;
+        
+        if (inventory.length === 0) {
+            listEl.innerHTML = '<p class="text-gray-500 text-xs">何も持っていません。</p>';
+        } else {
+            listEl.innerHTML = inventory.map(item => `
+                <div
+                    key="${item.id}"
+                    onclick="handleInventoryItemClick('${item.id}')"
+                    class="p-1 bg-neutral-800 rounded-sm shadow-md hover:bg-neutral-700 transition cursor-pointer flex items-center border border-neutral-700 transform hover:scale-[1.05]"
+                >
+                    <img src="${item.image}" alt="${item.name}" class="w-8 h-8 rounded mr-1 object-cover border border-neutral-600" />
+                    <span class="text-xs text-gray-100 font-medium">${item.name}</span>
+                </div>
+            `).join('');
+        }
+    }
+    
+    function renderInputFields() {
+        const inputFieldsEl = document.getElementById('input-fields');
+        const inputLabelEl = document.getElementById('input-label');
+        const inputFieldEl = document.getElementById('input-field');
+        const submitButton = document.getElementById('input-submit-button');
+        
+        if (!activeInputType) {
+            inputFieldsEl.classList.add('hidden');
+            return;
+        }
+        
+        inputFieldsEl.classList.remove('hidden');
+        
+        let label = '';
+        let value = '';
+        let maxLength = 3; // Default
+        
+        if (activeInputType === 'safe') {
+            // 修正: 桁数表記を削除
+            label = '金庫のパスワードを入力:';
+            value = safeInputValue;
+            maxLength = 5;
+        } else if (activeInputType === 'wall_panel') {
+            // 修正: 桁数表記を削除
+            label = '壁のパネルコードを入力:';
+            value = wallPanelInputValue;
+            maxLength = 3;
+        } else if (activeInputType === 'cabinet') {
+            // 修正: 桁数表記を削除
+            label = 'キャビネットコードを入力:';
+            value = cabinetInputValue;
+            maxLength = 3;
+        } else if (activeInputType === 'locker') {
+            // 修正: 桁数表記を削除
+            label = 'ロッカーコードを入力:';
+            value = lockerInputValue;
+            maxLength = 8;
+        }
+
+        inputLabelEl.textContent = label;
+        inputFieldEl.value = value;
+        inputFieldEl.maxLength = maxLength;
+        
+        // Event listener for input change
+        inputFieldEl.oninput = function(e) {
+            const val = e.target.value.replace(/[^0-9]/g, '');
+            if (activeInputType === 'safe') safeInputValue = val;
+            if (activeInputType === 'wall_panel') wallPanelInputValue = val;
+            if (activeInputType === 'cabinet') cabinetInputValue = val;
+            if (activeInputType === 'locker') lockerInputValue = val; 
+            e.target.value = val;
+            
+            // 桁数のチェック
+            submitButton.disabled = val.length !== maxLength;
+        };
+
+        // 初期ロード時のボタン無効化チェック
+        submitButton.disabled = value.length !== maxLength;
+
+        // inputにフォーカス
+        inputFieldEl.focus();
+    }
+    
+    function renderModals() {
+        document.getElementById('modal-container').innerHTML = ''; // Clear previous modals
+
+        if (showDetailModal && activeDetailItem) {
+            const content = `
+                <div class="flex flex-col items-center">
+                    <img src="${activeDetailItem.image}" alt="${activeDetailItem.name}" class="w-20 h-20 rounded mb-2 object-cover border border-neutral-600" />
+                    <div class="max-h-60 overflow-y-auto w-full p-2">
+                        <p class="text-sm text-center text-gray-300 whitespace-pre-wrap">${activeDetailItem.description}</p>
+                    </div>
+                </div>
+            `;
+            renderModal(activeDetailItem.name, content, 'closeDetailModal');
+        } else if (showHintModal) {
+            const content = `<p class="text-sm text-center text-teal-400 font-medium">${hintMessage}</p>`;
+            renderModal('ヒント', content, 'closeHintModal');
+        } else if (showColorSequenceModal) {
+            const content = `
+                <p class="text-xl font-bold text-center mt-2 mb-2 flex justify-center items-center">
+                  <span class="w-8 h-8 bg-green-500 rounded-sm shadow-md border border-green-400 mx-1 flex items-center justify-center"></span>
+                  <span class="text-gray-500 text-xl font-black">→</span>
+                  <span class="w-8 h-8 bg-black rounded-sm shadow-md border border-neutral-600 mx-1 flex items-center justify-center"></span>
+                  <span class="text-gray-500 text-xl font-black">→</span>
+                  <span class="w-8 h-8 bg-white rounded-sm shadow-md border border-gray-400 mx-1 flex items-center justify-center"></span>
+                </p>
+                <div class="mt-3 text-center text-xs font-medium text-gray-400">
+                    <p>何かの手がかりになりそう。</p>
+                </div>
+            `;
+            renderModal('？', content, 'closeColorSequenceModal');
+        } else if (showAstrolabePuzzle) {
+            const content = `
+                <p class="text-sm text-center text-gray-300 mb-4">シンボルを正しい順序でクリックしてください。</p>
+                <div class="flex justify-center gap-2">
+                    <button onclick="handleAstrolabeSymbolClick('sun')" class="p-3 bg-yellow-500 text-black rounded-full text-xl">☀️</button>
+                    <button onclick="handleAstrolabeSymbolClick('moon')" class="p-3 bg-gray-400 text-black rounded-full text-xl">🌙</button>
+                    <button onclick="handleAstrolabeSymbolClick('star')" class="p-3 bg-blue-400 text-black rounded-full text-xl">⭐</button>
+                    <button onclick="handleAstrolabeSymbolClick('planet')" class="p-3 bg-orange-500 text-black rounded-full text-xl">🪐</button>
+                    <button onclick="handleAstrolabeSymbolClick('comet')" class="p-3 bg-cyan-400 text-black rounded-full text-xl">☄️</button>
+                </div>
+            `;
+            renderModal('天球儀のパズル', content, 'closeAstrolabeModal');
+        }
+    }
+    
+    function renderGame() {
+        if (!gameStarted) return;
+
+        // Hide/Show main screens
+        document.getElementById('start-screen').classList.add('hidden');
+        document.getElementById('game-screen').classList.remove('hidden');
+        document.getElementById('top-bar').classList.remove('hidden');
+
+        renderChapterDisplay(); // Render the chapter display
+
+        if (gameWon) {
+            document.getElementById('game-won-screen').classList.remove('hidden');
+            document.getElementById('top-bar').classList.add('hidden');
+            document.getElementById('game-screen').classList.add('hidden');
+            document.getElementById('chapter-display').classList.add('hidden'); // Hide chapters on win screen
+            return;
+        } else {
+            document.getElementById('game-won-screen').classList.add('hidden');
+        }
+        
+        if (showRoomIntro) {
+            // Show room intro screen, handled by startRoomIntro
+            return;
+        }
+
+        // Render main game elements
+        renderRoomItems();
+        renderInventory();
+        renderInputFields();
+        renderModals();
+        renderMessage();
+    }
+
+    // --- 5. EVENT HANDLERS (ロジック) ---
+
+    function startGame() {
+        gameStarted = true;
+        document.getElementById('start-screen').classList.add('hidden');
+        document.getElementById('game-screen').classList.remove('hidden');
+        startRoomIntro();
+    }
+
+    function startRoomIntro() {
+        showRoomIntro = true;
+        introStep = 'title';
+        document.getElementById('top-bar').classList.add('hidden');
+        document.getElementById('chapter-display').classList.add('hidden');
+        document.getElementById('game-screen').classList.add('hidden');
+        document.getElementById('room-intro-screen').classList.remove('hidden');
+        
+        const introContentEl = document.getElementById('intro-content');
+        const currentRoom = gameData.rooms[currentRoomId];
+        
+        // Step 1: Show Title
+        introContentEl.innerHTML = `<h2 class="text-4xl font-bold text-yellow-400 animate-fade-in">${currentRoom.name}</h2>`;
+        
+        setTimeout(() => {
+            // Step 2: Show Description
+            introStep = 'description';
+            introContentEl.innerHTML = `<p class="text-xl font-medium leading-relaxed animate-fade-in px-8 text-gray-300">${currentRoom.description}</p>`;
+            
+            setTimeout(() => {
+                // Step 3: End Intro
+                showRoomIntro = false;
+                introStep = 'done';
+                document.getElementById('room-intro-screen').classList.add('hidden');
+                document.getElementById('top-bar').classList.remove('hidden');
+                document.getElementById('game-screen').classList.remove('hidden');
+                renderGame();
+            }, 3000); // Duration of description display
+            
+        }, 2000); // Duration of title display
+    }
+
+
+    function handleItemClick(itemId) {
+        if (gameWon || showRoomIntro) return;
+
+        // Close all UI elements first
+        setMessage('');
+        closeDetailModal();
+        closeInputFields();
+        hideNotification();
+        closeHintModal();
+        closeColorSequenceModal();
+        
+        const itemData = currentRoomItems.find(item => item.id === itemId);
+        if (!itemData) return;
+
+        // Items that primarily provide information and should show a detail modal
+        if (['picture_frame', 'clock', 'color_chart', 'statue', 'tattered_certificate', 'toy_car', 'memory_photo'].includes(itemId)) { 
+             // ボロボロの賞状も情報アイテムとして扱う
+            activeDetailItem = {
+                id: itemData.id,
+                name: itemData.name,
+                description: itemData.initialDescription,
+                image: itemData.image
+            };
+            showDetailModal = true;
+            renderGame();
+            return;
+        }
+
+        // Actions for other interactive items
+        switch (itemId) {
+            case 'desk':
+                if (!inventory.some(item => item.id === 'book')) {
+                    const newItem = gameData.hiddenItems.book;
+                    setMessage('机の引き出しを開けました。中に古びた本があります！');
+                    inventory.push(newItem);
+                    showNotification(newItem.name);
+                } else {
+                    setMessage('引き出しは空です。もう何もありません。');
+                }
+                break;
+
+            case 'safe':
+                if (!safeUnlocked) {
+                    activeInputType = 'safe';
+                    setMessage('金庫のパスワードを入力してください。');
+                    renderInputFields();
+                } else {
+                    setMessage('金庫はすでに開いています。中は空です。'); 
+                }
+                break;
+
+            case 'sink':
+                if (inventory.some(item => item.id === 'dirty_cloth') && !clothCleaned) {
+                    const newItem = gameData.hiddenItems.clean_cloth;
+                    setMessage('汚れた布を流し台で洗いました。布に「黄、青、赤」の模様が浮かび上がりました！');
+                    inventory = inventory.filter(item => item.id !== 'dirty_cloth'); // 汚れた布を消費
+                    inventory.push(newItem);
+                    clothCleaned = true;
+                    showNotification(newItem.name);
+                } else if (clothCleaned) {
+                    setMessage('流し台はきれいな布を洗うのに使いました。');
+                } else {
+                    setMessage('水が出ます。何か洗うものはありますか？');
+                }
+                break;
+
+            case 'wall_panel':
+                if (currentRoomId === 'room1') {
+                    if (!wallPanelSolved) {
+                        activeInputType = 'wall_panel';
+                        setMessage('壁のパネルのコードを入力してください。');
+                        renderInputFields();
+                    } else {
+                        setMessage('パネルはすでに開いています。');
+                    }
+                }
+                break;
+
+            case 'door_to_room2':
+                if (inventory.some(item => item.id === 'key_to_room2')) {
+                    const itemsToRemoveIds = ['key_to_room2']; 
+                    inventory = inventory.filter(item => !itemsToRemoveIds.includes(item.id)); 
+
+                    setMessage('鍵を使って子供部屋へのドアを開けました！');
+                    room2DoorUnlocked = true;
+                    
+                    // 部屋移動処理をswitchRoom関数に任せる
+                    switchRoom('room2');
+                } else {
+                    setMessage('鍵がかかっています。子供部屋への鍵が必要です。');
+                }
+                break;
+
+            case 'table':
+                if (currentRoomId === 'room2') {
+                    // ★修正なし: 走り書きの数字のみ入手
+                    const newItems = ['small_numbers_note']; 
+                    let acquired = [];
+                    let somethingFound = false;
+
+                    newItems.forEach(itemId => {
+                        if (!inventory.some(item => item.id === itemId)) {
+                            const newItem = gameData.hiddenItems[itemId];
+                            inventory.push(newItem);
+                            acquired.push(newItem.name);
+                            somethingFound = true;
+                        }
+                    });
+
+                    if (somethingFound) {
+                        setMessage(`テーブルの下から、${acquired.join('と')}を見つけました！`);
+                        showNotification(acquired.join('と')); // 複数のアイテム名を通知
+                    } else {
+                        setMessage('テーブルの下にはもう何もありません。');
+                    }
+                }
+                break;
+
+            case 'locked_locker':
+                if (currentRoomId === 'room2') {
+                    if (!lockerUnlocked) {
+                        activeInputType = 'locker';
+                        setMessage('鍵付きロッカーのコードを入力してください。'); // 8桁に変更
+                        renderInputFields();
+                    } else {
+                        setMessage('ロッカーはすでに開いています。もう何もありません。'); 
+                    }
+                }
+                break;
+
+            case 'bookshelf':
+                if (currentRoomId === 'room2') {
+                    // ★修正なし: 落書き（doodle）を入手
+                    if (!inventory.some(item => item.id === 'doodle')) { 
+                        const newItem = gameData.hiddenItems.doodle; 
+                        setMessage('本棚から落書きを見つけました！');
+                        inventory.push(newItem);
+                        showNotification(newItem.name);
+                    } else {
+                        setMessage('本棚にはもう何もありません。'); 
+                    }
+                }
+                break;
+
+            case 'sun_painting':
+            case 'moon_painting':
+            case 'star_painting':
+                if (currentRoomId === 'room2') {
+                    if (!lockerUnlocked) {
+                        setMessage('ロッカーを開けるまで、壁の絵は隠されています。');
+                        break;
+                    }
+                    
+                    paintingSequence.push(itemId);
+                    setMessage(`${itemData.name}をクリックしました。`);
+
+                    if (!inventory.some(item => item.id === 'doodle')) { 
+                         setMessage('他に手がかりはないでしょうか？');
+                         paintingSequence = [];
+                         break;
+                    }
+
+                    if (paintingSequence.length === 3) {
+                      if (paintingSequence[0] === 'sun_painting' &&
+                          paintingSequence[1] === 'moon_painting' &&
+                          paintingSequence[2] === 'star_painting') {
+                        if (!inventory.some(item => item.id === 'key_to_room3')) { 
+                          const newItem = gameData.hiddenItems.key_to_room3;
+                          setMessage('絵を正しい順序でクリックしました！奥から地下室への鍵が出てきました！');
+                          inventory.push(newItem);
+                          showNotification(newItem.name);
+                        } else {
+                          setMessage('もう鍵は手に入れています。');
+                        }
+                      } else {
+                        setMessage('絵の順序が違います。メモをよく確認しましょう。');
+                      }
+                      paintingSequence = []; // Reset sequence
+                    }
+                }
+                break;
+
+            case 'white_table':
+                if (currentRoomId === 'room3') {
+                    if (!inventory.some(item => item.id === 'broken_music_box')) {
+                        const newItem = gameData.hiddenItems.broken_music_box;
+                        setMessage('テーブルの上にある壊れたオルゴールを手に取った。');
+                        inventory.push(newItem);
+                        showNotification(newItem.name);
+                    } else {
+                        setMessage('テーブルの上にはもう何もありません。');
+                    }
+                }
+                break;
+
+            case 'door_to_room3':
+                if (inventory.some(item => item.id === 'key_to_room3')) {
+                    const itemsToRemoveIds = ['key_to_room3', 'doodle', 'small_numbers_note']; // 車と写真は初期アイテムになったため削除
+                    inventory = inventory.filter(item => !itemsToRemoveIds.includes(item.id));
+
+                    setMessage('鍵を使って地下室へのドアを開けました！');
+                    room3DoorUnlocked = true;
+                    
+                    // 部屋移動処理をswitchRoom関数に任せる
+                    switchRoom('room3');
+                } else {
+                    setMessage('鍵がかかっています。地下室への鍵が必要です。');
+                }
+                break;
+
+            case 'suspicious_tile':
+                if (currentRoomId === 'room3') {
+                    if (!inventory.some(item => item.id === 'cipher_note')) {
+                        // 積み木をチェック
+                        if (inventory.some(item => item.id === 'wooden_block')) { 
+                            const newItem = gameData.hiddenItems.cipher_note;
+                            setMessage('奇妙な積み木をタイルの中央の窪みにはめ込むと、タイルが回転し、奥から暗号メモが出てきました！');
+                            inventory.push(newItem); 
+                            showNotification(newItem.name);
+                        } else {
+                            // ヒントメッセージを修正
+                            setMessage('このタイルには窪みがあります。');
+                        }
+                    } else {
+                        setMessage('タイルは静かに床に埋まっています。');
+                    }
+                }
+                break;
+
+            case 'locked_cabinet':
+                if (currentRoomId === 'room3') {
+                    if (!cabinetUnlocked) {
+                        if (inventory.some(item => item.id === 'cipher_note')) {
+                             activeInputType = 'cabinet';
+                             setMessage('鍵のかかったキャビネットです。コードを入力してください。');
+                             renderInputFields();
+                        } else {
+                             setMessage('鍵がかかっています。他に何か手がかりを探す必要がありそうです。');
+                        }
+                    } else {
+                        setMessage('キャビネットはすでに開いています。中には特に何もありません。'); 
+                    }
+                }
+                break;
+
+            case 'telescope':
+                if (currentRoomId === 'room3') {
+                    if (windowCleaned) {
+                        setMessage('望遠鏡を覗くと、遠くに5つの星が特定の順序で並んでいるのが見えた。「太陽、月、星、惑星、彗星」のようだ。');
+                    } else {
+                        if (inventory.some(item => item.id === 'clean_cloth')) {
+                            setMessage('汚れた窓を「きれいな布」で拭いた。これで外がよく見える。');
+                            windowCleaned = true;
+                        } else {
+                            setMessage('望遠鏡の先の窓が汚れていて、外がよく見えない。');
+                        }
+                    }
+                }
+                break;
+
+            case 'astrolabe':
+                if (currentRoomId === 'room3') {
+                    if (inventory.some(item => item.id === 'strange_gem')) {
+                         setMessage('「奇妙な宝石」を天球儀の窪みにはめ込むと、天球儀が音を立てて動き出した！');
+                         showAstrolabeModal();
+                    } else {
+                        setMessage('天球儀には宝石型の窪みがある。何かをはめ込む必要がありそうだ。');
+                    }
+                }
+                break;
+
+            case 'final_door':
+                if (inventory.some(item => item.id === 'final_key')) {
+                    setMessage('最終の鍵を使ってドアを開けました！脱出成功！');
+                    inventory = inventory.filter(item => item.id !== 'final_key'); 
+                    gameWon = true;
+                    renderGame();
+                } else {
+                    setMessage('鍵がかかっています。最終の鍵が必要です。');
+                }
+                break;
+            
+            default:
+                setMessage('特に何も起こりません。');
+                break;
+        }
+
+        renderGame();
+    }
+    
+    // パスワード入力フィールド共通のSubmitハンドラ
+    function handleInputSubmit() {
+        if (activeInputType === 'safe') {
+            handleSafeSubmit();
+        } else if (activeInputType === 'wall_panel') {
+            handleWallPanelSubmit();
+        } else if (activeInputType === 'cabinet') {
+            handleCabinetSubmit();
+        } else if (activeInputType === 'locker') { 
+            handleLockerSubmit();
+        }
+    }
+    
+    // 金庫パスワード提出 (19853)
+    function handleSafeSubmit() {
+        // ★金庫のコードロジック: 19 (額縁) + 85 (古びた本P) + 3 (古時計) = 19853
+        if (safeInputValue === '19853') {
+            const dirtyCloth = gameData.hiddenItems.dirty_cloth; 
+            
+            setMessage('金庫が開きました！中に汚れた布が入っています。また、壁に新しいパネルが現れたようです。');
+            
+            if (!inventory.some(item => item.id === 'dirty_cloth')) {
+                inventory.push(dirtyCloth);
+                showNotification(dirtyCloth.name);
+            }
+
+            safeUnlocked = true;
+            closeInputFields();
+        } else {
+            setMessage('パスワードが違います。もう一度、部屋の中の手がかりを探しましょう。', true);
+            safeInputValue = '';
+            document.getElementById('input-field').value = '';
+        }
+        renderGame();
+    }
+
+    // 壁パネルコード提出 (312)
+    function handleWallPanelSubmit() {
+        // ★パネルのコードロジック: きれいな布の順序（黄色、青、赤）と色見本（黄=3, 青=1, 赤=2）= 312
+        if (wallPanelInputValue === '312') {
+            const newItem = gameData.hiddenItems.key_to_room2; 
+            setMessage('パネルが開き、奥から子供部屋への鍵が出てきました！');
+            if (!inventory.some(item => item.id === 'key_to_room2')) {
+                inventory.push(newItem);
+                showNotification(newItem.name);
+            }
+            wallPanelSolved = true;
+            closeInputFields();
+        } else {
+            setMessage('コードが違います。もう一度、手持ちのアイテムや色見本の手がかりを確認しましょう。', true);
+            wallPanelInputValue = '';
+            document.getElementById('input-field').value = '';
+        }
+        renderGame();
+    }
+    
+    // ロッカーコード提出 (86575219)
+    function handleLockerSubmit() {
+        // ★ロッカーのコードロジック: 8657 (車のおもちゃナンバー) + 5 (写真のろうそくの数) + 21 (賞状の数字) + 9 (走り書きの数字) = 86575219 (8桁)
+        if (lockerInputValue === '86575219') {
+            const newItem = gameData.hiddenItems.wooden_block; // 報酬は積み木
+            setMessage('ロッカーが開きました！中には奇妙な積み木が入っています。壁に本棚と絵が現れました！');
+            
+            if (!inventory.some(item => item.id === 'wooden_block')) {
+                inventory.push(newItem);
+                showNotification(newItem.name);
+            }
+            lockerUnlocked = true;
+            closeInputFields();
+        } else {
+            // ★ヒントテキストを更新
+            setMessage('コードが違います。', true);
+            lockerInputValue = '';
+            document.getElementById('input-field').value = '';
+        }
+        renderGame();
+    }
+
+
+    // キャビネットコード提出 (733)
+    function handleCabinetSubmit() {
+        // ★キャビネットのコードロジック: 石像の記号（▲●■）と暗号メモ（▲=7, ●=3, ■=3） = 733
+        if (cabinetInputValue === '733') {
+            const newItem = gameData.hiddenItems.strange_gem;
+            setMessage('キャビネットが開きました！中から奇妙な宝石が出てきました！'); 
+            if (!inventory.some(item => item.id === 'strange_gem')) {
+                inventory.push(newItem);
+                showNotification(newItem.name);
+            }
+            cabinetUnlocked = true;
+            closeInputFields();
+        } else {
+            setMessage('コードが違います。もう一度、手持ちのアイテムや記号の手がかりを確認しましょう。', true);
+            cabinetInputValue = '';
+            document.getElementById('input-field').value = '';
+        }
+        renderGame();
+    }
+
+    function handleInventoryItemClick(itemId) {
+        if (gameWon || showRoomIntro) return;
+
+        closeInputFields();
+        hideNotification();
+        closeHintModal();
+        closeColorSequenceModal();
+
+        const clickedItem = Object.values(gameData.hiddenItems).find(item => item.id === itemId);
+
+        if (clickedItem) {
+            activeDetailItem = clickedItem;
+            showDetailModal = true;
+            renderGame();
+        }
+    }
+
+    // 部屋情報モーダル表示
+    function showRoomDescriptionModal() {
+        if (gameWon || showRoomIntro) return;
+        closeInputFields();
+        hideNotification();
+        closeHintModal();
+        closeColorSequenceModal();
+        setMessage('');
+
+        const currentRoom = gameData.rooms[currentRoomId];
+        activeDetailItem = {
+          id: 'room_description',
+          name: `${currentRoom.name} の説明`,
+          description: currentRoom.description,
+          image: 'https://placehold.co/80x80/4B0082/FFF?text=部屋情報'
+        };
+        showDetailModal = true;
+        renderGame();
+    }
+
+    // ヒントメッセージ取得
+    function getHintMessage() {
+        if (!safeUnlocked) {
+          // 修正済み: 「金庫のパスワードは、」を削除
+          return "部屋のあちこちにある数字に注目してみましょう。"; 
+        }
+        if (currentRoomId === 'room1' && !wallPanelSolved) {
+            if (!inventory.some(item => item.id === 'dirty_cloth') && !clothCleaned) {
+                 return "金庫から汚れた布を手に入れました。この布が次の手がかりになりそうです。";
+            }
+            if (!clothCleaned) {
+              return "汚い布に何か書いてありそう。どうすれば、見えるようになるかな？";
+            }
+            return "きれいになった布の模様と、壁の色見本表をよく見比べてみましょう。";
+        }
+        
+        if (currentRoomId === 'room1' && !room2DoorUnlocked) {
+            return "壁のパネルの謎を解き、子供部屋への鍵を手に入れましょう。";
+        }
+        
+        if (currentRoomId === 'room2' && !lockerUnlocked) {
+            if (!inventory.some(item => item.id === 'small_numbers_note')) {
+                return "子供部屋の鍵付きロッカーのコードが必要です。テーブルの下をよく探してみましょう。";
+            }
+            // ★ヒントテキストを更新
+            return "アイテムの数字と日付に注目しよう";
+        }
+
+        if (currentRoomId === 'room2' && lockerUnlocked && !room3DoorUnlocked) {
+            if (!inventory.some(item => item.id === 'doodle')) {
+                return "本棚を探してみましょう。";
+            }
+            return "入手したアイテムに何か手掛かりが隠されているかも？";
+        }
+
+        if (currentRoomId === 'room3') {
+            // 1. Player needs the 'cipher_note'
+            if (!inventory.some(item => item.id === 'cipher_note')) {
+                if (inventory.some(item => item.id === 'wooden_block')) {
+                    return "床に怪しいタイルがある。持ち物の「奇妙な積み木」が使えないだろうか？";
+                }
+                return "この部屋には何か仕掛けがありそうだ。前の部屋から持ってきたものが使えるかもしれない。";
+            }
+            // 2. Player has 'cipher_note', needs to unlock the cabinet
+            if (!cabinetUnlocked) {
+                return "キャビネットのロックは3桁の数字だ。手に入れた「暗号メモ」と部屋にある「石像」をよく見比べてみよう。";
+            }
+            // 3. Player has 'strange_gem', needs to use it on the astrolabe
+            if (inventory.some(item => item.id === 'strange_gem') && !showAstrolabePuzzle) {
+                return "手に入れた「奇妙な宝石」はどこかに使えそうだ。壁の「古代の天球儀」が怪しい。";
+            }
+            // 4. Player needs the astrolabe clue (final_key not yet found)
+            if (!inventory.some(item => item.id === 'final_key')) {
+                if (!windowCleaned) {
+                    if (inventory.some(item => item.id === 'clean_cloth')) {
+                        return "天球儀の謎を解くヒントが必要だ。望遠鏡の先の窓が汚れているのが気になる...「きれいな布」で拭けるかもしれない。";
+                    }
+                    return "天球儀の謎を解くヒントが必要だ。望遠鏡の先の窓が汚れていて、何も見えない。";
+                }
+                // Window is clean
+                return "窓はきれいになった。もう一度望遠鏡を覗いてみれば、天球儀のヒントが見つかるかもしれない。";
+            }
+            // 5. Player has the final key
+            if (inventory.some(item => item.id === 'final_key')) {
+                return "最終の鍵を手に入れた！あとは脱出するだけだ。";
+            }
+        }
+        
+        return "これまでの手がかりをもう一度確認してみましょう。";
+    }
+
+    // ヒントモーダル表示
+    function showHint() {
+        if (gameWon || showRoomIntro) return;
+        closeInputFields();
+        hideNotification();
+        closeDetailModal();
+        closeColorSequenceModal();
+        
+        hintMessage = getHintMessage();
+        showHintModal = true;
+        renderGame();
+    }
+    
+    // 色の順序ヒントモーダル表示
+    function showColorSequence() {
+        if (gameWon || showRoomIntro) return;
+        closeInputFields();
+        hideNotification();
+        closeDetailModal();
+        closeHintModal();
+        setMessage('');
+
+        showColorSequenceModal = true;
+        renderGame();
+    }
+    
+
+    // ゲームリセット
+    function resetGame() {
+        currentRoomId = 'room1';
+        inventory = [];
+        message = '';
+        gameWon = false;
+        gameStarted = false;
+        safeUnlocked = false;
+        clothCleaned = false;
+        wallPanelSolved = false;
+        room2DoorUnlocked = false;
+        room3DoorUnlocked = false;
+        paintingSequence = [];
+        cabinetUnlocked = false;
+        lockerUnlocked = false; 
+        activeInputType = null;
+        safeInputValue = '';
+        wallPanelInputValue = '';
+        cabinetInputValue = '';
+        lockerInputValue = ''; 
+        showDetailModal = false;
+        activeDetailItem = null;
+        acquiredItemName = '';
+        showRoomIntro = false;
+        introStep = '';
+        showHintModal = false;
+        hintMessage = '';
+        showColorSequenceModal = false;
+        
+        // UIを初期状態に戻す
+        document.getElementById('start-screen').classList.remove('hidden');
+        document.getElementById('game-screen').classList.add('hidden');
+        document.getElementById('game-won-screen').classList.add('hidden');
+        document.getElementById('top-bar').classList.add('hidden');
+        document.getElementById('chapter-display').classList.add('hidden'); // Hide chapters
+        document.getElementById('modal-container').innerHTML = '';
+        document.getElementById('input-fields').classList.add('hidden');
+        renderMessage();
+        renderInventory(); // Ensure inventory count is zeroed
+    }
+
+
+    // --- 6. INITIALIZATION ---
+    window.onload = function() {
+        // 初期レンダリングはstart-screenのみ表示
+        resetGame(); // 状態を初期化し、UIをリセット
+        document.getElementById('game-won-screen').classList.add('hidden');
+        document.getElementById('game-screen').classList.add('hidden');
+        document.getElementById('start-screen').classList.remove('hidden');
+        document.getElementById('top-bar').classList.add('hidden');
+    };
+
+</script>
+
+</body>
+</html>
