@@ -363,6 +363,42 @@
     <p>© どきどき！まほうのめいろゲーム</p>
   </footer>
 
+  <!-- Firebase SDK のインポート (Cloud同期用・準備ベース) -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    window.db = null;
+    window.auth = null;
+    window.isCloudRankingEnabled = false;
+
+    // Firebaseの初期化関数
+    const initFirebase = async () => {
+      console.log("%c[Firebase] 初期化処理チェックを開始します...", "color: #06b6d4; font-weight: bold;");
+      try {
+        if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+          console.log("%c[Firebase] 環境変数 __firebase_config を検出しました。接続を開始します。", "color: #06b6d4;");
+          const app = initializeApp(__firebase_config);
+          window.auth = getAuth(app);
+          window.db = getFirestore(app);
+          
+          console.log("%c[Firebase] 匿名認証(サインイン)を試行中...", "color: #06b6d4;");
+          await signInAnonymously(window.auth);
+          window.isCloudRankingEnabled = true;
+          console.log("%c[Firebase] 🔓 匿名認証成功。オンラインランキングが有効になりました！", "color: #10b981; font-weight: bold;");
+        } else {
+          console.log("%c[Firebase] 設定が見つかりません。ローカルストレージ（オフライン）モードで動作します。", "color: #64748b; font-style: italic;");
+        }
+      } catch (error) {
+        console.error("[Firebase] ❌ 初期化または認証中にエラーが発生しました:", error);
+      }
+      // グローバル関数側のランキング描画を促す
+      if (typeof displayRanking === 'function') displayRanking();
+    };
+
+    window.addEventListener('DOMContentLoaded', initFirebase);
+  </script>
   <!-- ゲームのプログラム -->
   <script>
     const canvas = document.getElementById('gameCanvas');
